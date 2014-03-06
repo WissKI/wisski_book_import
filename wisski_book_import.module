@@ -1,0 +1,318 @@
+<?php
+// $ID$
+
+
+function wisski_book_import_menu() {
+
+  $item['wisski/book_import/%'] = array(
+    'title' => 'WissKI Book Import',
+    'description' => 'Chunk an XML file and import it as a book with instance items',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_book_import_input_form', 2),
+    'access arguments' => array('create new books'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $item['wisski/book_import'] = array(
+    'title' => 'WissKI Book Import',
+    'description' => 'Chunk an XML file and import it as a book with instance items',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('wisski_book_import_input_form', 0),
+    'access arguments' => array('create new books'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $item;
+
+}
+
+
+
+
+function wisski_book_import_input_form($form) {
+  
+/*  $model = wisski_textmod_get_model();
+  $text_groups = array();
+  foreach ($model['groups'] as $gid => $g) {
+    if ($g['top'] && $g['text_class'] != NULL)
+      $text_groups["gid_" . $gid] = wisski_pathbuilder_getName($gid);
+  }
+*/
+  $formats = array();
+  foreach (filter_formats() as $fid => $f) {
+    $formats[$fid] = $f->name;
+  }
+  
+  module_load_include('inc', 'wisski_pathbuilder');
+  $book_paths['0_0'] = t('<Empty>');
+//  $page_paths['0_0'] = t('<Empty>');
+  foreach (wisski_pathbuilder_getPaths() as $pid) {
+    $data = wisski_pathbuilder_getPathData($pid);
+    if (!$data['enabled'] || !$data['group_id']) continue;
+    $name = $data['name'];
+    $gid = 0;
+    while ($data['group_id']) {
+      $data = wisski_pathbuilder_getPathData($data['group_id']);
+      $name = $data['name'] . ' -> ' . $name;
+      $gid = $data['id'];
+    }
+    $book_paths["${gid}_$pid"] = $name;
+//    if (isset($text_groups["gid_$gid"])) $page_paths["${gid}_$pid"] = $name;
+  }
+  asort($book_paths);
+  $book_paths_0 = $book_paths;
+  unset($book_paths['0_0']);
+//  $page_paths_0 = $page_paths;
+//  unset($page_paths['0_0']);
+  
+  $form = array();
+  drupal_set_message(t('Take care of the path settings below. The import will currently not check whether they are sound!'), 'warning');
+  $form['filename'] = array(
+    '#type' => 'textfield',
+    '#title' => t('File'),
+    '#description' => t('The path to a file on the server or a URL for a file.'),
+  );
+  $form['fragment'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('File contains an XML fragment'),
+    '#description' => t('If checked, wraps a &lt;div&gt; tag around the content for proper parsing. Take care that the XPaths reflect this!'),
+    '#default_value' => 0,
+  );
+  $form['gp_book_title'] = array(
+    '#type' => 'select',
+    '#title' => t('Book title path'),
+    '#options' => $book_paths_0,
+    '#defaul_value' => '0_0',
+  );
+  $form['book_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Book title XPath'),
+    '#default_value' => '//title',
+    '#description' => t('Is interpreted as an XPath. Surround it by single quotes if you want to enter plain text.'),
+  );
+  $form['gp_book_content'] = array(
+    '#type' => 'select',
+    '#title' => t('Book content path'),
+    '#options' => $book_paths_0,
+    '#defaul_value' => '0_0',
+  );
+  $form['book_content'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Book content XPath'),
+    '#default_value' => '//description',
+    '#description' => t('Is interpreted as an XPath. Surround it by single quotes if you want to enter plain text.'),
+  );
+  $form['book_format'] = array(
+    '#type' => 'select',
+    '#title' => 'Book content input format',
+    '#options' => $formats,
+  );
+  $form['page_path'] = array(
+    '#type' => 'select',
+    '#title' => 'Path from the book to the pages',
+    '#options' => $book_paths,
+  );
+  $form['gp_page_title'] = array(
+    '#type' => 'select',
+    '#title' => 'Page title path',
+    '#options' => $book_paths_0,
+  );
+  $form['page_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Page title XPath'),
+    '#default_value' => './/head',
+    '#description' => t('Is interpreted as an XPath with context node being the node for page content. Surround it by single quotes if you want to enter plain text.'),
+  );
+  $form['gp_page_content'] = array(
+    '#type' => 'select',
+    '#title' => 'Page content path',
+    '#options' => $book_paths,
+  );
+  $form['page_content'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Page content XPath',
+    '#description' => t("The XPath to the tag name to split up the document into pages. This tag name MUST NOT be nested (like div's occuring within div's.)"),
+    '#default_value' => '//div1',
+  );
+  $form['page_format'] = array(
+    '#type' => 'select',
+    '#title' => 'Page content input format',
+    '#options' => $formats,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+
+}
+
+
+/*function wisski_book_import_input_form_validate($form, &$form_state) {
+
+  list($group_title, $path_title) = explode('_', $form_state['values']['gp_title']);
+  list($group_content, $path_content) = explode('_', $form_state['values']['gp_content']);
+  if ($group_title != 0 && $group_content != 0 && $group_title != $group_content) {
+    form_set_error('gp_title', t('If set, paths for title and content must be of same group.'));
+    form_set_error('gp_content');
+  }
+
+}*/
+
+
+
+function wisski_book_import_input_form_submit($form, &$form_state) {
+  
+  global $user;
+  
+  $doc = file_get_contents($form_state['values']['filename']);
+  $is_fragment = $form_state['values']['fragment'];
+  $dom = new DOMDocument();
+  if ($is_fragment) $doc = "<div>$doc</div>";
+  if (!$dom->loadXML($doc)) {
+    drupal_set_message(t('Could not parse XML file.'), 'error');
+    return;
+  }
+
+  $xpath = new DOMXPath($dom);
+
+  list(, $path_page_title) = explode('_', $form_state['values']['gp_page_title']);
+  list(, $path_page_content) = explode('_', $form_state['values']['gp_page_content']);
+  $page_content = $form_state['values']['page_content'];
+  $page_title = 'string(' . $form_state['values']['page_title'] . ')';
+  $page_format = $form_state['values']['page_format'];
+  list(, $pathid) = explode('_', $form_state['values']['page_path']);
+    
+  $page_nodes = $xpath->query($page_content);
+  
+  if ($page_nodes->length == 0) {
+    drupal_set_message('No split-up tag found', 'error');
+    return;
+  }
+
+#  dpm($cleaned_divs);
+#  dpm($pathid);
+#  dpm($gid);
+#  return;
+
+/*  $book = new StdClass();
+  $book->type = 'book';
+  $book->title = $form_state['values']['title'];
+  $book->body = 'Dies ist die automatisch erstellte Hauptseite Ihres importierten Buches. Bitte blättern Sie über die Navigationsleiste unten in Ihrem Buch.';
+
+  node_save($book);*/
+  
+  list(, $path_title) = explode('_', $form_state['values']['gp_book_title']);
+  list(, $path_content) = explode('_', $form_state['values']['gp_book_content']);
+
+  $book_uri = NULL;
+  $triples = array();
+  module_load_include('inc', 'wisski_pathbuilder');
+  if ($path_title != 0) {
+    $book_title = 'string(' . $form_state['values']['book_title'] . ')';
+    $book_title = $xpath->evaluate($book_title);
+    if (!empty($book_title)) {
+      $triples = _wisski_pathbuilder_generate_triples_of_path(NULL, $book_title, $path_title);
+      $book_uri = $triples[0]['s'];
+    }
+  }
+  if ($path_content != 0) {
+    $book_content = 'string(' . $form_state['values']['book_content'] . ')';
+    $book_content = $xpath->evaluate($book_content);
+    if (!empty($book_content)) {
+      $triples = array_merge($triples, _wisski_pathbuilder_generate_triples_of_path(NULL, $book_content, $path_content, $book_uri));
+      if ($book_uri == NULL) $book_uri = $triples[0]['s'];
+    }
+  }
+  
+  if ($book_uri == NULL) {
+    drupal_set_message(t('Must have either book content or book title.'), 'error');
+    return;
+  }
+  
+  $book = wisski_store_addNodeForTriple($triples[0]);
+  foreach($triples as $triple)
+    wisski_store_addNodeForTriple($triple);
+
+  wisski_store_getObj()->wisski_ARCAdapter_getStore()->insert($triples, wisski_store_getObj()->wisski_ARCAdapter_graphName(), FALSE);
+
+  $book_format = $form_state['values']['book_format'];
+  
+  $book = node_load($book->nid, NULL, TRUE);
+  if ($path_content != 0) {
+    $book->format = $book_format;
+    $book->body = $book_content;
+  }
+  $book->user = $user;
+  node_save($book);
+
+  $triples = array();
+  
+  $book_item = array(
+    'link_path' => 'node/' . $book->nid,
+    'link_title' => $value_title,
+    'menu_name' => 'book-toc-' . $book->nid,
+  );
+  $book_mlid = menu_link_save($book_item);
+  $book_tmp = array(
+    'mlid' => $book_mlid,
+    'nid' => $book->nid,
+    'bid' => $book->nid,
+  );
+  drupal_write_record('book', $book_tmp);
+
+
+  $data = wisski_pathbuilder_getPathData($pathid);
+
+  $page_node_l = $page_nodes->length;
+  for ($weight = 0; $weight < $page_node_l; $weight++) {
+    $node = $page_nodes->item($weight);
+
+    $content = $xpath->evaluate("string(.)", $node);
+    
+    $triples = _wisski_pathbuilder_generate_triples_of_path(NULL, $content, $path_page_content);
+    
+    $first = $triples[0];
+    $page_uri = $first['s'];
+    $page = wisski_store_addNodeForTriple($first);
+    
+    if ($path_page_title != 0) {
+      $title = $xpath->evaluate($page_title, $node);
+      $triples = array_merge($triples, _wisski_pathbuilder_generate_triples_of_path(NULL, $title, $path_page_title, $page_uri));
+    }
+    
+    $triples = array_merge($triples, _wisski_pathbuilder_generate_triples_of_path(NULL, 'a', $pathid, $book_uri, array(), $page_uri, $data['disamb'] - 1));
+
+
+    foreach($triples as $triple)
+      wisski_store_addNodeForTriple($triple);
+
+    wisski_store_getObj()->wisski_ARCAdapter_getStore()->insert($triples, wisski_store_getObj()->wisski_ARCAdapter_graphName(), FALSE);
+    
+    $page = node_load($page->nid, NULL, TRUE);
+    $page->format = $format;
+    $page->body = $content;
+    $page->user = $user;
+    node_save($page);
+    
+    $page_item = array(
+      'link_path' => 'node/' . $page->nid,
+      'link_title' => $title,
+      'menu_name' => 'book-toc-' . $book->nid,
+      'plid' => $book_mlid,
+      'weight' => $weight,
+    );
+    $page_mlid = menu_link_save($page_item);
+    $page_tmp = array(
+      'mlid' => $page_mlid,
+      'nid' => $page->nid,
+      'bid' => $book->nid,
+    );
+    drupal_write_record('book', $page_tmp);
+
+  }
+
+  $form_state['redirect'] = 'node/' . $book->nid;
+   
+}
+
+
