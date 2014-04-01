@@ -1,6 +1,7 @@
 ; $Id$
 name = WissKI XML Book Import
 description = Splits an XML document and creates a Drupal book from it with instance nodes.
+version = 0.2-dev
 core = 6.x
 package = "WissKI"
 dependencies[] = book
