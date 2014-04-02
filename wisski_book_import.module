@@ -76,6 +76,12 @@ function wisski_book_import_input_form($form) {
     '#description' => t('If checked, wraps a &lt;div&gt; tag around the content for proper parsing. Take care that the XPaths reflect this!'),
     '#default_value' => 0,
   );
+  $form['xmlns'] = array(
+    '#type' => 'textarea',
+    '#title' => t('XML namespaces'),
+    '#default_value' => '',
+    '#description' => t('If your XML file uses namespaces, you must declare namespace prefixes here in order to make the XPaths below work. Enter one mapping per line in the form &lt;prefix&gt;=&lt;namespace&gt;. An empty prefix for the default namespace is not possible!'),
+  );
   $form['gp_book_title'] = array(
     '#type' => 'select',
     '#title' => t('Book title path'),
@@ -86,6 +92,18 @@ function wisski_book_import_input_form($form) {
     '#type' => 'textfield',
     '#title' => t('Book title XPath'),
     '#default_value' => '//title',
+    '#description' => t('Is interpreted as an XPath. Surround it by single quotes if you want to enter plain text.'),
+  );
+  $form['gp_book_id'] = array(
+    '#type' => 'select',
+    '#title' => t('Book ID path'),
+    '#options' => $book_paths_0,
+    '#defaul_value' => '0_0',
+  );
+  $form['book_id'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Book ID XPath'),
+    '#default_value' => "'id00001'",
     '#description' => t('Is interpreted as an XPath. Surround it by single quotes if you want to enter plain text.'),
   );
   $form['gp_book_content'] = array(
@@ -107,34 +125,34 @@ function wisski_book_import_input_form($form) {
   );
   $form['page_path'] = array(
     '#type' => 'select',
-    '#title' => 'Path from the book to the pages',
+    '#title' => 'Path from the book to its parts',
     '#options' => $book_paths,
   );
   $form['gp_page_title'] = array(
     '#type' => 'select',
-    '#title' => 'Page title path',
+    '#title' => 'Part title path',
     '#options' => $book_paths_0,
   );
   $form['page_title'] = array(
     '#type' => 'textfield',
-    '#title' => t('Page title XPath'),
+    '#title' => t('Part title XPath'),
     '#default_value' => './/head',
     '#description' => t('Is interpreted as an XPath with context node being the node for page content. Surround it by single quotes if you want to enter plain text.'),
   );
   $form['gp_page_content'] = array(
     '#type' => 'select',
-    '#title' => 'Page content path',
+    '#title' => 'Part content path',
     '#options' => $book_paths,
   );
   $form['page_content'] = array(
     '#type' => 'textfield',
-    '#title' => 'Page content XPath',
+    '#title' => 'Part content XPath',
     '#description' => t("The XPath to the tag name to split up the document into pages. This tag name MUST NOT be nested (like div's occuring within div's.)"),
     '#default_value' => '//div1',
   );
   $form['page_format'] = array(
     '#type' => 'select',
-    '#title' => 'Page content input format',
+    '#title' => 'Part content input format',
     '#options' => $formats,
   );
   $form['submit'] = array(
@@ -174,6 +192,16 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
   }
 
   $xpath = new DOMXPath($dom);
+  $xmlns = trim($form_state['values']['xmlns']);
+  if (!empty($xmlns)) {
+    foreach (explode("\n", $xmlns) as $m) {
+      list($prefix, $ns) = explode('=', $m, 2);
+      $prefix = trim($prefix);
+      $ns = trim($ns);
+      if (empty($ns) || empty($prefix)) continue;
+      $xpath->registerNamespace($prefix, $ns);
+    }
+  }
 
   list(, $path_page_title) = explode('_', $form_state['values']['gp_page_title']);
   list(, $path_page_content) = explode('_', $form_state['values']['gp_page_content']);
@@ -181,6 +209,7 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
   $page_title = 'string(' . $form_state['values']['page_title'] . ')';
   $page_format = $form_state['values']['page_format'];
   list(, $pathid) = explode('_', $form_state['values']['page_path']);
+
     
   $page_nodes = $xpath->query($page_content);
   
@@ -202,6 +231,7 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
   node_save($book);*/
   
   list(, $path_title) = explode('_', $form_state['values']['gp_book_title']);
+  list(, $path_bid) = explode('_', $form_state['values']['gp_book_id']);
   list(, $path_content) = explode('_', $form_state['values']['gp_book_content']);
 
   $book_uri = NULL;
@@ -213,6 +243,14 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
     if (!empty($book_title)) {
       $triples = _wisski_pathbuilder_generate_triples_of_path(NULL, $book_title, $path_title);
       $book_uri = $triples[0]['s'];
+    }
+  }
+  if ($path_bid != 0) {
+    $book_id = 'string(' . $form_state['values']['book_id'] . ')';
+    $book_id = $xpath->evaluate($book_id);
+    if (!empty($book_id)) {
+      $triples = array_merge($triples, _wisski_pathbuilder_generate_triples_of_path(NULL, $book_id, $path_bid, $book_uri));
+      if ($book_uri == NULL) $book_uri = $triples[0]['s'];
     }
   }
   if ($path_content != 0) {
