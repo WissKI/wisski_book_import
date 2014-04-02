@@ -139,16 +139,22 @@ function wisski_book_import_input_form($form) {
     '#default_value' => './/head',
     '#description' => t('Is interpreted as an XPath with context node being the node for page content. Surround it by single quotes if you want to enter plain text.'),
   );
+  $form['page_content'] = array(
+    '#type' => 'textfield',
+    '#title' => 'XPath defining part',
+    '#description' => t("The XPath to the tag name to split up the document into pages. This tag name MUST NOT be nested (like div's occuring within div's.), otherwise the text structure will be broken."),
+    '#default_value' => '//div1',
+  );
   $form['gp_page_content'] = array(
     '#type' => 'select',
     '#title' => 'Part content path',
     '#options' => $book_paths,
   );
-  $form['page_content'] = array(
+  $form['page_content_text'] = array(
     '#type' => 'textfield',
     '#title' => 'Part content XPath',
-    '#description' => t("The XPath to the tag name to split up the document into pages. This tag name MUST NOT be nested (like div's occuring within div's.)"),
-    '#default_value' => '//div1',
+    '#description' => t("The XPath to the actual text content of the part. Is interpreted as an XPath with context node being the node for page content."),
+    '#default_value' => '*',
   );
   $form['page_format'] = array(
     '#type' => 'select',
@@ -205,6 +211,7 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
 
   list(, $path_page_title) = explode('_', $form_state['values']['gp_page_title']);
   list(, $path_page_content) = explode('_', $form_state['values']['gp_page_content']);
+  $page_content_text = $form_state['values']['page_content_text'];
   $page_content = $form_state['values']['page_content'];
   $page_title = 'string(' . $form_state['values']['page_title'] . ')';
   $page_format = $form_state['values']['page_format'];
@@ -254,8 +261,13 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
     }
   }
   if ($path_content != 0) {
-    $book_content = 'string(' . $form_state['values']['book_content'] . ')';
-    $book_content = $xpath->evaluate($book_content);
+//    $book_content = 'string(' . $form_state['values']['book_content'] . ')';
+    $book_content = $form_state['values']['book_content'];
+    $nodelist = $xpath->query($book_content);
+    $book_content = '';
+    foreach($nodelist as $node) {
+      $book_content .= $dom->saveXML($node);
+    }
     if (!empty($book_content)) {
       $triples = array_merge($triples, _wisski_pathbuilder_generate_triples_of_path(NULL, $book_content, $path_content, $book_uri));
       if ($book_uri == NULL) $book_uri = $triples[0]['s'];
@@ -305,7 +317,11 @@ function wisski_book_import_input_form_submit($form, &$form_state) {
   for ($weight = 0; $weight < $page_node_l; $weight++) {
     $node = $page_nodes->item($weight);
 
-    $content = $xpath->evaluate("string(.)", $node);
+    $nodelist = $xpath->query($page_content_text, $node);
+    $content = '';
+    foreach ($nodelist as $n) {
+      $content .= $dom->saveXML($n);
+    }
     
     $triples = _wisski_pathbuilder_generate_triples_of_path(NULL, $content, $path_page_content);
     
